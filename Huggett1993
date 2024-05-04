@@ -1,0 +1,192 @@
+%% Huggett(1993)
+tic
+clear
+clc
+
+%% Parameters
+beta  = 0.9932;
+alpha = 1.5;
+
+a_bound = -1;
+%a_bound = -2;
+
+N     = 1001;
+a_grids = linspace(a_bound,5,N);
+
+y_e   = 1;
+y_u   = 0.5;
+
+y = [y_e,y_u]';
+
+M = length(y); %Number of states of the income shock
+
+pi_ee = 0.97;
+pi_uu = 0.5 ; 
+
+transition_y = [pi_ee, 1-pi_ee;1-pi_uu, pi_uu];  %transition matrix
+
+tol   = 1e-3;
+
+qmin  = 0.9;
+qmax  = 1.1;
+
+iter_h = 1;
+iter_h_max = 5000;
+
+q0 = (qmin+qmax)/2; %Initial guess of the bond price
+
+%% Households'problem
+
+
+while iter_h < iter_h_max
+        % compute the consumption matrix
+        consumption = zeros(N,N,M);
+        for i = 1:N %Asset held today
+            for j = 1:N %Asset to be held tomorrow
+                for k = 1:M %state of the shock today
+                     consumption(i,j,k) = y(k)+a_grids(i) - q0*a_grids(j);
+                    if consumption(i,j,k) == 0
+                        consumption(i,j,k) = 1e-10;
+                    elseif consumption(i,j,k) <= 0
+                        consumption(i,j,k) = NaN;
+                    end
+                end
+            end
+        end
+        utility = consumption.^(1-alpha)./(1-alpha);
+        
+        %VFI
+        V0 = zeros(N,M);
+        V1 = zeros(N,M);
+        
+        a_prime = zeros(N,M); 
+        
+        tol_vfi = 1e-5;
+        epsilon = 1;
+        
+        while epsilon > tol_vfi
+            EV = beta.*transition_y*V0';
+            for i = 1:N %Given the bond holding today
+                for j = 1:M %Given the state of the income shock today
+                    V_interim = utility(i,:,j)' + EV(j,:)';
+                    
+                    [V1(i,j),idx] = max(V_interim);
+                    
+                    a_prime(i,j) = a_grids(idx);
+                end
+            end
+            epsilon = max(abs(V1-V0),[],"all");
+            % disp(strcat("VFI iter:", string(iter)))
+            % disp(strcat("VFI epsilon:", string(epsilon)))
+            
+            V0 = V1;
+           
+        end
+        % 
+        %  %Plot the value functions
+        % figure
+        % plot(a_grids,V1(:,1));
+        % hold on 
+        % plot(a_grids,V1(:,2));
+        % xlabel('a')
+        % ylabel('Value')
+        % legend('$V_e$','$V_u$','Interpreter','latex')
+        % % 
+        %  %Plot the policy functions
+        %  figure 
+        % plot(a_grids,a_prime(:,1));
+        % hold on 
+        % plot(a_grids,a_prime(:,2));
+        % xlabel('a')
+        % ylabel('$a^{\prime}$','Interpreter','latex')
+        % legend('$a^{\prime}_e$','$a^{\prime}_u$','Interpreter','latex')
+        % a45 = ones(length(a_grids));
+        % 
+        %% Derive the transition probabilities
+        TranProb = [];
+        % for i = 1:N %Given the bond holding today
+        %     a_interim = zeros(num_state,N*M);
+        %     for k = 1:M %Given the state today
+        %         idx = find(a_grids==a_prime(i,k));
+        %         location = 2*idx-1; %Find the position of a', or of the corresponding pair (se',su')
+        %         a_interim(k,location:location+num_state-1) = transition_y(k,:);
+        %     end
+        %     TranProb = [TranProb;a_interim];
+        % end
+        
+        for k = 1: M % Given the state of today
+            for j = 1:M %The state of tomorrow
+                a_interim = zeros(N);
+                for i = 1:N %Given the bond holding today
+                    idx = find(a_grids == a_prime(i,k));
+                    a_interim(i,idx) = transition_y(k,j);
+                end
+                TranProb = [TranProb, a_interim];
+            end
+        end
+
+        TranProb = [TranProb(:,1:N*M);TranProb(:,N*M+1:end)];
+
+
+        % E = eig(TranProb,"matrix");   
+        % det(TranProb)
+        
+        %% To get the invariant distribution by simulation
+        
+        T_sim = 1000;
+
+        tol_distr = 1;
+        error_distr = 1;
+    
+        mu_sim0 = 1/(N*M) * ones(1,N*M);
+        mu_sim = zeros(T_sim,N*M);
+        mu_sim(1,:) = mu_sim0;
+        for i = 2:T_sim
+            mu_sim(i,:) = mu_sim(i-1,:)*TranProb;
+        end
+        
+        mu_distr = reshape(mu_sim(end,:)',[],2);
+
+        % figure
+        % plot(a_grids,mu_distr(:,1));
+        % figure
+        % plot(a_grids,mu_distr(:,2));
+       
+
+        
+        %% To compute the aggregate saving
+        agg_saving_interim = mu_distr.*a_prime;
+        agg_saving = sum(agg_saving_interim,"all");
+        
+        if abs(agg_saving) < tol
+            break
+        else
+            if agg_saving > tol
+                qmin = q0;
+            elseif agg_saving <-tol
+                qmax = q0;
+            end
+        end
+
+        q1 = (qmax+qmin)/2;
+
+        disp(strcat("aggregate saving:", string(agg_saving)))
+        disp(strcat("bond price:", string(q0)))
+        disp(strcat("iter:", string(iter_h)))
+
+        q0 = q1;
+        iter_h = iter_h + 1;
+
+end
+
+r = 1/q0^4 - 1;
+
+       %% Compute and plot the Lorenz Curve and the Gini coefficient
+
+
+
+
+
+toc
+
+
