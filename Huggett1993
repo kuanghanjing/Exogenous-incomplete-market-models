@@ -1,5 +1,3 @@
-
-%% Huggett(1993)
 tic
 clear
 clc
@@ -22,7 +20,8 @@ y = [y_e,y_u]';
 M = length(y); %Number of states of the income shock
 
 pi_ee = 0.97;
-pi_uu = 0.5 ; 
+pi_uu = 0.5 ;
+%pi_uu = 0.75 ;
 
 transition_y = [pi_ee, 1-pi_ee;1-pi_uu, pi_uu];  %transition matrix
 
@@ -84,25 +83,27 @@ while iter_h < iter_h_max
            
         end
         % 
-        %  %Plot the value functions
-%         figure
-%         plot(a_grids,V1(:,1));
-%         hold on 
-%         plot(a_grids,V1(:,2));
-%         xlabel('a')
-%         ylabel('Value')
-%         legend('$V_e$','$V_u$','Interpreter','latex')
-        % % 
+        % %  %Plot the value functions
+        % figure
+        % plot(a_grids,V1(:,1))
+        % hold on 
+        % plot(a_grids,V1(:,2))
+        % xlabel('a')
+        % ylabel('Value')
+        % legend('$V(a,e)$','$V(a,u)$','Interpreter','latex')
+        % % % 
+        % a45 = a_grids;
         %  %Plot the policy functions
-%          figure 
-%         plot(a_grids,a_prime(:,1));
-%         hold on 
-%         plot(a_grids,a_prime(:,2));
-%         xlabel('a')
-%         ylabel('$a^{\prime}$','Interpreter','latex')
-%         legend('$a^{\prime}_e$','$a^{\prime}_u$','Interpreter','latex')
-        % a45 = ones(length(a_grids));
-        % 
+        % figure 
+        % plot(a_grids,a_prime(:,1))
+        % hold on 
+        % plot(a_grids,a_prime(:,2))
+        % hold on
+        % plot(a_grids,a45,'r--')
+        % xlabel('a')
+        % ylabel('$a^{\prime}$','Interpreter','latex')
+        % legend('$a^{\prime}(a,e)$','$a^{\prime}(a,u)$','45 degree','Interpreter','latex')
+
         %% Derive the transition probabilities
         TranProb = [];
         % for i = 1:N %Given the bond holding today
@@ -135,31 +136,34 @@ while iter_h < iter_h_max
         %% To get the invariant distribution by simulation
         
         T_sim = 1000;
-
-        tol_distr = 1e-4;
-        error_distr = 1;
     
         mu_sim0 = 1/(N*M) * ones(1,N*M);
         mu_sim = zeros(T_sim,N*M);
         mu_sim(1,:) = mu_sim0;
-%         for i = 2:T_sim
-%             mu_sim(i,:) = mu_sim(i-1,:)*TranProb;
-%         end
+        for i = 2:T_sim
+            mu_sim(i,:) = mu_sim(i-1,:)*TranProb;
+        end
 
-while error_distr > tol_distr
-    mu_sim1 = mu_sim0*TranProb;
+        % tol_distr = 1e-4;
+        % error_distr = 1;
+        % while error_distr > tol_distr
+        %     mu_sim1 = mu_sim0*TranProb;
+        % 
+        %     error_distr = abs(max(mu_sim1-mu_sim0));
+        %     mu_sim0  = mu_sim1;
+        % end
 
-    error_distr = abs(max(mu_sim1-mu_sim0));
-    mu_sim0  = mu_sim1;
-end
 
-
-        mu_distr = reshape(mu_sim0(end,:)',[],2);
+        mu_distr = reshape(mu_sim(end,:)',[],2);
 
         % figure
         % plot(a_grids,mu_distr(:,1));
-        % figure
+        % xlabel('a');
+        % legend('Distribution of asset holding under e ')
+        % figure 
         % plot(a_grids,mu_distr(:,2));
+        % xlabel('a');
+        % legend('Distribution of asset holding under u ')
        
 
         
@@ -187,49 +191,72 @@ end
         iter_h = iter_h + 1;
 
 end
+
+
           %% The interest rate at the equilibrium
-          r = 1/q0^4 - 1;
+          r = 1/q0 - 1;
 
           %% Compute and plot the Lorenz Curve and the Gini coefficient
 
           mu_distr_lorenz = reshape(mu_distr,[],1); 
           bond_holding    = reshape(a_prime,[],1);
+          % Y = kron(y',ones(N,1));
+          % Y = reshape(Y,[],1);
+          % a = [a_grids';a_grids'];
+          % cash_in_hand = a + Y;
 
-          share_households = [];
-          cum_shareofwealth= [];
+          
 
-          for i = 1:N %starting from the first grid
-              idx = find(bond_holding == a_grids(i));
-              if mu_distr_lorenz(idx) == 0  %which means that no one holds that amount of wealth
-                  return
-              elseif mu_distr_lorenz <= 1e-20 %the same reason as above
-                  return
-              else
-                  share_households_interim = sum(mu_distr_lorenz(idx));
-                  share_households = [share_households;share_households_interim];
-                  cum_shareofwealth_interim = bond_holding(i);
-                  cum_shareofwealth =[cum_shareofwealth;cum_shareofwealth_interim];
+          %lorenz = [mu_distr_lorenz, cash_in_hand];
+          lorenz  = [mu_distr_lorenz, bond_holding];
+
+          [sortedlorenz, idx_CIH] = sortrows(lorenz,2);
+
+          
+          idx1 = find(sortedlorenz(:,1) ~= 0 );
+          sortedlorenz2 = sortedlorenz(idx1,:);
+
+          sortedlorenz2 = [sortedlorenz2,zeros(length(sortedlorenz2),1)];
+          for i = 1:length(sortedlorenz2)
+              if sortedlorenz2(i,2) <0
+              sortedlorenz2(i,3) = 0;
+              else 
+                  sortedlorenz2(i,3) = sortedlorenz2(i,2);
               end
           end
 
-          total_wealth = sum(cum_shareofwealth);
-          cum_shareofwealth = cum_shareofwealth./total_wealth;
-          
-          for i = 2:length(share_households)
-              cum_shareofwealth(i) =cum_shareofwealth(i)+cum_shareofwealth(i-1);
-              share_households(i)  = share_households(i)+share_households(i-1);
+          % lorenz_curve = [];
+          % for i = 1: length(sortedlorenz)
+          %     if sortedlorenz(i,1) ==0
+          %         return
+          %     elseif sortedlorenz(i,1) >= 1e-20
+          %     lorenz_curve = [lorenz_curve;sortedlorenz(i,:)];
+          %     end
+          % end
+
+          for i = 2:length(sortedlorenz2)
+              sortedlorenz2(i,:) = sortedlorenz2(i,:) + sortedlorenz2(i-1,:);
           end
 
+          total_wealth = sum(sortedlorenz2(end,3));
+          sortedlorenz2(:,3) = sortedlorenz2(:,3)./total_wealth;
+
           
 
+  
           figure
-          plot(share_households,cum_shareofwealth)
-          
+          plot(sortedlorenz2(:,1),sortedlorenz2(:,3))
+
+          totalArea = 0.5; % Total area under the line of perfect equality
+          areaUnderCurve = trapz(sortedlorenz2(1:end,1), sortedlorenz2(1:end,3)); % Trapz computes the area under the curve
+          areaBetweenCurveAndEquality = totalArea - areaUnderCurve;
+
+          % Compute the Gini index
+          GiniIndex = areaBetweenCurveAndEquality / totalArea;
+         
 
 
-
-
-
+         
 
 
 toc
