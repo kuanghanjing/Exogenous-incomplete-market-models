@@ -1,0 +1,199 @@
+clear
+clc
+%% Parameters
+beta     = 0.96;
+sigma    = 2;
+
+Prob_s   = [0.75, 0.25;0.15, 0.85];
+s_L      = 0.25;
+s_H      = 1;
+s        = [s_L;s_H];
+num_s    = length(s);
+
+b        = 0 ; % ad-hoc borrowing limit
+
+q_min    = 1.005*beta;
+q_max    = 0.999 ;
+
+q0       = (q_min + q_max)/2; %Initial guess for the asset price
+
+num_a    = 100;
+
+alpha    = 1/3;
+A        = 1;
+delta    =0.05;
+
+tol_asset = 1e-3;
+
+iter     = 1;
+iter_max =500;
+
+
+%% Representative Firm's problem
+%Solve the L_bar
+distr_L0 = 1/num_s * ones(size(s));
+T_sim = 1000; 
+t = 1;
+ while t<=T_sim
+     distr_L1 = Prob_s * distr_L0;
+     distr_L0 = distr_L1;
+     t = t+1;
+ end
+L_bar    = sum(s.*distr_L0); %Inititial guess for the aggregate labor
+
+while iter <iter_max
+
+    
+    K        = (alpha*A*L_bar^(1-alpha)/(1/q0 - (1-delta)))^(1/(1-alpha));
+    w        = (1-alpha)*A*L_bar^(-alpha)*K;
+
+%% Households' problem
+
+    natural_b= w*s_L/(1-q0) ; % the natural borrowing limit
+    a_lower  = min(b,natural_b);
+    a_upper  = 40;
+    
+    a_grids  = linspace(a_lower,a_upper, num_a);
+    
+    consumption = zeros(num_a,num_a,num_s);
+    for i = 1:num_a % Given the asset holding today
+        for j = 1:num_a %Given the asset holding to hold tomorrow
+            for k = 1:num_s %Give the state of the shock today
+                consumption(i,j,k) = a_grids(i) + w*s(k) - q0 * a_grids(j);
+                if consumption(i,j,k) == 0
+                    consumption(i,j,k) =1e-10;
+                elseif consumption(i,j,k) <= 0
+                    consumption(i,j,k) = NaN;
+                end
+            end
+        end
+    end
+    utility = consumption.^(1-sigma)./(1-sigma);
+    
+    %VFI
+    V0 = zeros(num_a,num_s);
+    V1 = zeros(num_a,num_s);
+    
+    apolicy = zeros(num_a,num_s);
+    
+    tol_vfi = 1e-5;
+    epsilon = 1;
+    
+    while epsilon > tol_vfi
+        EV = beta.*Prob_s*V0';
+        for i = 1:num_a %Given the asset holding today
+            for k =1:num_s %Given the state of the shock today
+                V_interim = utility(i,:,k)' + EV(k,:)';
+    
+                [V1(i,k), idx] = max(V_interim);
+                apolicy(i,k)   = a_grids(idx);
+            end
+        end
+        epsilon = max(abs(V1-V0),[],"all");
+    
+        V0 = V1;
+    end
+
+     % 
+        %  %Plot the value functions
+        figure
+        plot(a_grids,V1(:,1))
+        hold on 
+        plot(a_grids,V1(:,2))
+        xlabel('a')
+        ylabel('Value')
+        legend('$V(a,L)$','$V(a,H)$','Interpreter','latex')
+        % % 
+        a45 = a_grids;
+         %Plot the policy functions
+        figure 
+        plot(a_grids,apolicy(:,1))
+        hold on 
+        plot(a_grids,apolicy(:,2))
+        hold on
+        plot(a_grids,a45,'r--')
+        xlabel('a')
+        ylabel('$a^{\prime}$','Interpreter','latex')
+        legend('$a^{\prime}(a,L)$','$a^{\prime}(a,H)$','45 degree','Interpreter','latex')
+
+
+        %% Derive the transition probabilities
+        TranProb = [];
+        
+        for k = 1: num_s % Given the state of today
+            for j = 1:num_s %The state of tomorrow
+                a_interim = zeros(num_a);
+                for i = 1:num_a %Given the bond holding today
+                    idx = find(a_grids == apolicy(i,k));
+                    a_interim(i,idx) = Prob_s(k,j);
+                end
+                TranProb = [TranProb, a_interim];
+            end
+        end
+
+        TranProb = [TranProb(:,1:num_a*num_s);TranProb(:,num_a*num_s+1:end)];
+
+
+        
+        %% To get the invariant distribution by simulation
+       
+    
+        mu_sim0 = 1/(num_a*num_s) * ones(1,num_a*num_s);
+        mu_sim = zeros(T_sim,num_a*num_s);
+        mu_sim(1,:) = mu_sim0;
+        for i = 2:T_sim
+            mu_sim(i,:) = mu_sim(i-1,:)*TranProb;
+        end
+
+        mu_distr = reshape(mu_sim(end,:)',[],2);
+
+         figure
+        plot(a_grids,mu_distr(:,1));
+        xlabel('a');
+        legend('Distribution of asset holding under L ')
+        figure 
+        plot(a_grids,mu_distr(:,2));
+        xlabel('a');
+        legend('Distribution of asset holding under H ')
+
+        
+        %% To compute the asset supply and the aggregate labour
+        asset_supply_interim = mu_distr.*apolicy;
+        asset_supply = sum(asset_supply_interim,"all");
+
+
+
+        %% Compare the asset supply 
+
+        if abs(asset_supply - K) < tol_asset
+            break
+        else
+            if asset_supply > K
+                q_max = q0;
+            elseif asset_supply < K
+                q_min = q0;
+            end
+        end
+
+        q1 = (q_max+q_min)/2;
+
+        r = 1/q1 - 1;
+
+
+        disp(strcat("bond price:", string(q0)))
+        disp(strcat("iter:", string(iter)))
+
+        q0 = q1;
+        iter = iter + 1;
+
+
+end
+         
+
+
+
+
+
+
+
+
