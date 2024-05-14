@@ -17,7 +17,7 @@ q_max    = 0.999 ;
 
 q0       = (q_min + q_max)/2; %Initial guess for the asset price
 
-num_a    = 100;
+num_a    = 1000;
 
 alpha    = 1/3;
 A        = 1;
@@ -94,27 +94,7 @@ while iter <iter_max
         V0 = V1;
     end
 
-     % 
-        %  %Plot the value functions
-        figure
-        plot(a_grids,V1(:,1))
-        hold on 
-        plot(a_grids,V1(:,2))
-        xlabel('a')
-        ylabel('Value')
-        legend('$V(a,L)$','$V(a,H)$','Interpreter','latex')
-        % % 
-        a45 = a_grids;
-         %Plot the policy functions
-        figure 
-        plot(a_grids,apolicy(:,1))
-        hold on 
-        plot(a_grids,apolicy(:,2))
-        hold on
-        plot(a_grids,a45,'r--')
-        xlabel('a')
-        ylabel('$a^{\prime}$','Interpreter','latex')
-        legend('$a^{\prime}(a,L)$','$a^{\prime}(a,H)$','45 degree','Interpreter','latex')
+     
 
 
         %% Derive the transition probabilities
@@ -147,15 +127,7 @@ while iter <iter_max
 
         mu_distr = reshape(mu_sim(end,:)',[],2);
 
-         figure
-        plot(a_grids,mu_distr(:,1));
-        xlabel('a');
-        legend('Distribution of asset holding under L ')
-        figure 
-        plot(a_grids,mu_distr(:,2));
-        xlabel('a');
-        legend('Distribution of asset holding under H ')
-
+        
         
         %% To compute the asset supply and the aggregate labour
         asset_supply_interim = mu_distr.*apolicy;
@@ -189,9 +161,37 @@ while iter <iter_max
 
 end
          
+% 
+        %  %Plot the value functions
+        figure
+        plot(a_grids,V1(:,1))
+        hold on 
+        plot(a_grids,V1(:,2))
+        xlabel('a')
+        ylabel('Value')
+        legend('$V(a,L)$','$V(a,H)$','Interpreter','latex')
+        % % 
+        a45 = a_grids;
+         %Plot the policy functions
+        figure 
+        plot(a_grids,apolicy(:,1))
+        hold on 
+        plot(a_grids,apolicy(:,2))
+        hold on
+        plot(a_grids,a45,'r--')
+        xlabel('a')
+        ylabel('$a^{\prime}$','Interpreter','latex')
+        legend('$a^{\prime}(a,L)$','$a^{\prime}(a,H)$','45 degree','Interpreter','latex')
 
 
-
+         figure
+        plot(a_grids,mu_distr(:,1));
+        xlabel('a');
+        legend('Distribution of asset holding under L ')
+        figure 
+        plot(a_grids,mu_distr(:,2));
+        xlabel('a');
+        legend('Distribution of asset holding under H ')
 
 
 
