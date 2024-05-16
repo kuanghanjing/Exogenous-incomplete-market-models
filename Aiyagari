@@ -1,5 +1,3 @@
-
-
 clear
 clc
 %% Parameters
@@ -19,7 +17,7 @@ q_max    = 0.999 ;
 
 q0       = (q_min + q_max)/2; %Initial guess for the asset price
 
-num_a    = 2000;
+num_a    = 1000;
 
 alpha    = 1/3;
 A        = 1;
@@ -206,23 +204,25 @@ legend('$cpolicy(a,L)$','$cpolicy(a,H)$','Interpreter','latex')
 figure
 plot(a_grids,mu_distr(:,1));
 xlabel('a');
-legend('Distribution of asset holding under L ')
-figure 
+hold on
 plot(a_grids,mu_distr(:,2));
 xlabel('a');
-legend('Distribution of asset holding under H ')
+legend('Distribution of asset holding under L ','Distribution of asset holding under H ')
 
 %Distribution of consumption
 figure
 plot(a_grids,consumption_distr(:,1));
 xlabel('a');
-legend('Distribution of consumption under L ')
-figure 
+hold on
 plot(a_grids,consumption_distr(:,2));
 xlabel('a');
-legend('Distribution of consumption under H ')
+legend('Distribution of consumption under L ','Distribution of consumption under H ')
 
-
+figure
+histogram(mu_distr(:,1),'Normalization','probability')
+hold on
+histogram(mu_distr(:,2),'Normalization','probability')
+legend('Distribution of consumption under L ','Distribution of consumption under H ')
 
 
 
