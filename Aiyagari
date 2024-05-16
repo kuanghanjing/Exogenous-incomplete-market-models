@@ -1,4 +1,5 @@
 
+
 clear
 clc
 %% Parameters
@@ -226,38 +227,40 @@ legend('Distribution of consumption under H ')
 
 
 %% Aiyagari in the open economy
-q0 = 0.98;
-q_grids = linspace(0.965,0.99,100);
+num_q = 50;
+q_grids = linspace(0.965,0.99,num_q);
 
-iter_open = 1;
+
 CA_sum = [];
-for i = 1: 100
-    q0 = q_grids(i);
-    K        = (alpha*A*L_bar^(1-alpha)/(1/q0 - (1-delta)))^(1/(1-alpha));
-    w        = (1-alpha)*A*L_bar^(-alpha)*K^(alpha);
+
+  
+    K        = (alpha*A*L_bar^(1-alpha)./((q_grids).^(-1) - (1-delta))).^(1/(1-alpha));
+    w        = (1-alpha)*A*L_bar^(-alpha)*K.^(alpha);
     
     %% Households' problem
     
     natural_b= w*s_L/(1-q0) ; % the natural borrowing limit
-    a_lower  = min(b,natural_b);
-    a_upper  = 40;
+for l = 1:num_q
+
+        a_lower  = min(b,natural_b(l));
+        a_upper  = 40;
+        
+        a_grids  = linspace(a_lower,a_upper, num_a);
     
-    a_grids  = linspace(a_lower,a_upper, num_a);
-    
-    consumption = zeros(num_a,num_a,num_s);
-    for i = 1:num_a % Given the asset holding today
-        for j = 1:num_a %Given the asset holding to hold tomorrow
-            for k = 1:num_s %Give the state of the shock today
-                consumption(i,j,k) = a_grids(i) + w*s(k) - q0 * a_grids(j);
-                if consumption(i,j,k) == 0
-                    consumption(i,j,k) =1e-10;
-                elseif consumption(i,j,k) <= 0
-                    consumption(i,j,k) = NaN;
+        consumption = zeros(num_a,num_a,num_s);
+        for i = 1:num_a % Given the asset holding today
+            for j = 1:num_a %Given the asset holding to hold tomorrow
+                for k = 1:num_s %Give the state of the shock today
+                    consumption(i,j,k) = a_grids(i) + w(l)*s(k) - q_grids(l) * a_grids(j);
+                    if consumption(i,j,k) == 0
+                        consumption(i,j,k) =1e-10;
+                    elseif consumption(i,j,k) <= 0
+                        consumption(i,j,k) = NaN;
+                    end
                 end
             end
         end
-    end
-    utility = consumption.^(1-sigma)./(1-sigma);
+        utility = consumption.^(1-sigma)./(1-sigma);
     
     %VFI
     V0 = zeros(num_a,num_s);
@@ -277,7 +280,7 @@ for i = 1: 100
     
             [V1(i,k), idx] = max(V_interim);
             apolicy(i,k)   = a_grids(idx);
-            cpolicy(i,k)   = a_grids(i) + w*s(k) - q0 * a_grids(idx);
+          
         end
     end
     epsilon = max(abs(V1-V0),[],"all");
@@ -323,30 +326,29 @@ for i = 1: 100
     asset_supply = sum(asset_supply_interim,"all");
     
     
-    product      = A*K^alpha*L_bar^(1-alpha);
-    agg_consumption = sum(consumption_distr,"all");
+%     product      = A*K^alpha*L_bar^(1-alpha);
+%     agg_consumption = sum(consumption_distr,"all");
     
-    CA = product - agg_consumption - delta*K;
+%     CA = product - agg_consumption - delta*K;
+    CA = asset_supply - K(l);
 
     CA_sum = [CA_sum;CA];
 
-    iter_open = iter_open+1;
-    disp(strcat("iter:", string(iter_open)))
 
-end
+ end
 
-x_point = q_grids(62);  % Example x-coordinate
-y_point = CA_sum(62);  % Example y-coordinate
+    
+x_point = q_grids(31);  % Example x-coordinate
+y_point = CA_sum(31);  % Example y-coordinate
 
 % Mark the point on the curve with two orthogonal dotted lines
 
 figure 
 plot(q_grids,CA_sum');
 hold on 
-plot([x_point x_point], [-0.16 y_point], '--k');  % Vertical line from x-axis to the point
+plot([x_point x_point], [-6 y_point], '--k');  % Vertical line from x-axis to the point
 hold on
 plot([0 x_point], [y_point y_point], '--k');  % Horizontal line from y-axis to the point
 xlabel('Asset price')
 ylabel('Current account')
 xlim([0.96, 1])
-
