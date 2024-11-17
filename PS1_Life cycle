@@ -1,0 +1,257 @@
+clear
+clc
+
+%% Q1
+a_max  = 100;
+a_min  = 0;
+nkk    = 100;
+
+a_grid = linspace(a_min,a_max,nkk);
+
+%% Q2
+rho    = 0.9;
+sigma_eps  = 0.2;
+mu     =0; %the mean of the log z, provided that under level, the unconditional mean of z equals to 1, by Delta method, the mean of the log z should be 0, shouldn't it?
+m      =4; % the range of 4 sigmas as mentioned in the paper, but can change to 6 so as to consider extreme earnings shocks
+nzz    = 18; % 18 possible states as mentioned in the paper
+
+[logz,logzprob] = tauchen(nzz,mu,rho,sigma_eps,m);
+
+%% Q3
+% data = importdata('survival_rate.rtf');
+% survival_rate = data(10:end-1);
+% survival_rate = str2double(survival_rate);
+survival_rate = xlsread("survival_rate.xlsx");
+
+%to compute the fraction of the population phi_j in each age group j
+n = 0.01; %the rate of population growth
+phi =zeros(length(survival_rate),1);
+
+for j = 1:length(survival_rate)
+    if j == 1
+        phi(j) = survival_rate(j)/(1+n);
+    else
+        phi(j) = (survival_rate(j)/(1+n) )*phi(j-1);
+    end
+end
+
+phi = phi./sum(phi);
+
+
+
+%% Q4
+lambda0 = 0.195;
+lambda1 = 0.107;
+lambda2 = -0.00213;
+
+jr = 41;
+j  = 71;
+
+%to compute the matrix of efficiency
+efficiency = zeros(j,nzz);
+for i = 1:j
+    for z = 1:nzz
+        if i < jr
+            p_j = lambda0 + lambda1*i + lambda2*i^2;
+            efficiency(i,z) = exp(logz(z))*p_j;
+        elseif i >=jr
+            efficiency(i,z) = 0;
+        end
+    end
+end
+
+%to compute the total labor supply L 
+%L = sum(phi.*sum(efficiency,2));
+L=1.6;
+
+
+    
+%% Q5
+sigma =2;
+beta  = 0.96;
+a_low = 0;
+
+%CD production function
+alpha = 0.36; %capital share
+delta = 0.08; %depreciation rate
+A     = 1;    %aggregate productivity
+
+%% Q6
+r_g   = 0.02; % a guess for interest rate
+
+%% Q7
+
+% Aggregate capital demand
+agg_K = (1+n)*((r_g+delta)/(alpha*A*L^(1-alpha)))^(1/(alpha-1));
+
+% wage
+wage  = (1-alpha)*A*agg_K^alpha*L^(-alpha);
+
+omega = 0.5; %replacement rate
+%to compute the associated pension b
+b = omega*wage*L/(sum(phi(1:jr-1)));
+
+% equilibrium payroll tax
+theta = b*sum(phi(jr:end))/(wage*L);
+
+
+
+%% Q8
+T_g = 1.2; % Initial guess of accidental bequests 
+
+%% Q9 Solve for the HH problem to obtain the policy function g_a_j
+
+%build up the consumption and utility
+consumption = zeros(j,nkk,nkk,nzz);
+for l = 1:j % Given the age
+    for m = 1:nkk %Given the asset holding today
+        for n = 1:nkk %Given the asset holding tomorrow
+            for w = 1:nzz %Given the shock today
+                if l < jr
+                    consumption(l,m,n,w) = a_grid(m)*(1+r_g) + (1-theta)*efficiency(l,w)*wage + T_g - a_grid(n);
+                elseif l>=jr && l <j
+                    consumption(l,m,n,w) = a_grid(m)*(1+r_g) + b + T_g - a_grid(n);
+                elseif l == j
+                    consumption(l,m,n,w) = a_grid(m)*(1+r_g) + b + T_g;
+                end
+                if consumption(l,m,n,w) == 0 
+                    consumption(l,m,n,w) =1e-10;
+                elseif consumption(l,m,n,w) < 0
+                     consumption(l,m,n,w) =NaN;
+                end
+            end
+        end
+    end
+end
+utility = consumption.^(1-sigma)./(1-sigma);
+
+%%%%%%%%%%%%%%%%%%%% VFI(backward induction) %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%set up the value function for each age group j
+V = zeros(j,nkk,nzz);
+
+%set up the policy functions for each age group j
+policy_a = zeros(j,nkk,nzz);
+policy_c = zeros(j,nkk,nzz);
+
+for p = j:-1:1 % Given the age, which is from J to 1 backwards
+   for q = 1:nkk %Given the asset holding today
+      for r = 1:nzz %Given the shock
+          if p == j  % At the last period J, the agents die and hence policy_a at J =0, therefore the value function at J will be equal to utility w policy_c at J
+               utility_interim = squeeze(utility(p,q,:,r));
+               V(p,q,r) = max(utility_interim);
+               
+               policy_a(p,q,r) = 0;
+               policy_c(p,q,r) = a_grid(q)+b+T_g;     
+          elseif p <j && p>=jr
+              V0 = squeeze(V(p+1,:,:)); %Each vector should be the same, since the shocks here don't matter.
+              EV = beta*survival_rate(p+1).*V0;
+              utility_interim = squeeze(utility(p,q,:,r));
+              V_interim = utility_interim + EV(:,r);
+
+              [V(p,q,r),idx] = max(V_interim);
+              policy_a(p,q,r) = a_grid(idx);
+              policy_c(p,q,r) = a_grid(q)*r_g + b + T_g - policy_a(p,q,r);
+
+          elseif p<jr
+              V0 = squeeze(V(p+1,:,:));
+              EV = beta*survival_rate(p+1).*logzprob*V0';
+              utility_interim = squeeze(utility(p,q,:,r));
+              V_interim = utility_interim + EV(r,:)';
+
+              [V(p,q,r),idx] = max(V_interim);
+              policy_a(p,q,r) = a_grid(idx);
+              policy_c(p,q,r) = a_grid(q)*r_g + (1-theta)*efficiency(p,r)*wage + T_g - policy_a(p,q,r);
+          end
+      end
+   end
+end
+
+plot_policy_a_JR = policy_a(5,:,2) - a_grid;
+plot_policy_a_j = policy_a(5,:,2)- a_grid;
+
+
+plot(a_grid, plot_policy_a_JR)
+hold on 
+plot(a_grid, plot_policy_a_j)
+legend
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%% EGM %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+a_egm_1 = zeros(nkk,nzz);
+%a_egm = zeros(j,nkk,nzz); %note that here the nkk refers to the grids for the asset holding tomorrow
+policy_a_egm = zeros(j,nkk,nzz); %note that here the nkk refers to the grids for the asset holding today
+
+for p = j:-1:j-1 %Given the age
+    for q = 1:nkk %Given the asset holding today! or given the positions of the grids(instead of the values of the grids, since the values of the used grids will change)
+        for r = 1:nzz %Given the shock of today
+            if p == j  %At the last period J, households die and saving nothing for J+1
+                policy_a_egm(p,q,r) = 0;
+                policy_a_egm(p-1,q,r) = a_grid(q);
+                a_egm=((beta*survival_rate(p)*(1+r_g))^(-1/sigma) * (a_grid(q)*(1+r_g) + b + T_g) + a_grid(q) - b -T_g)/(1+r_g); %to compute asset holding at period J-1, given asset holding at J and J+1(=0)
+                policy_a_egm(p-2,q,r) = a_egm; %The a_egm we got is the policy value for the asset holding at J-2
+            elseif p <j-1 && p>=jr
+                a_egm = ((beta*survival_rate(p+1)*(1+r_g))^(-1/sigma) *(policy_a_egm(p,q,r)*(1+r_g)+b+T_g - policy_a_egm(p+1,q,r) ) + policy_a_egm(p,q,r) -b -T_g)/(1+r_g);
+                policy_a_egm(p-1,q,r) = a_egm; %so now by solving a_(p-1), we know the policy function for period p-1
+            elseif p==jr-1
+                a_egm = ((beta*survival_rate(p+1)*(1+r_g))^(-1/sigma) *(policy_a_egm(p,q,r)*(1+r_g) + b+T_g - policy_a_egm(p+1,q,r)) + policy_a_egm(p,q,r) - (1-theta)*efficiency(p,r)*wage - T_g)/(1+r_g);
+                policy_a_egm(p-1,q,r) = a_egm;
+            elseif p<jr-1 && p>1
+                aux = zeros(length(logzprob(r,:)),1);
+                for i = 1 : length(logzprob(r,:))
+                    aux(i) =logzprob(r,i)*((policy_a_egm(p,q,r)*(1+r_g) + (1-theta)*efficiency(p+1,i))*wage + T_g - policy_a_egm(p+1,q,i))^(-sigma);
+                end
+                    a_egm = (beta*survival_rate(p+1)*(1+r_g))^(-1/sigma) * (sum(aux))^(-1/sigma) - (1-theta)*efficiency(p,r)*wage - T_g + policy_a_egm(p,q,r);
+                    policy_a_egm(p-1,q,r) = a_egm;
+            elseif p==1
+                aux = zeros(length(logzprob(r,:)),1);
+                for i = 1 : length(logzprob(r,:))
+                    aux(i) =logzprob(r,i)*((policy_a_egm(p,q,r)*(1+r_g) + (1-theta)*efficiency(p+1,i))*wage + T_g - policy_a_egm(p+1,q,i))^(-sigma);
+                end
+                    a_egm_1(q,r) = (beta*survival_rate(p+1)*(1+r_g))^(-1/sigma) * (sum(aux))^(-1/sigma) - (1-theta)*efficiency(p,r)*wage - T_g + policy_a_egm(p,q,r);
+            end
+        end
+    end
+end
+
+% plot_policy_a_egm_JR = policy_a_egm(j-1,:,1) - policy_a_egm(j-2,:,1);
+% plot_policy_a_egm_j = policy_a_egm(4,:,1)- policy_a_egm(3,:,1);
+% 
+% plot(policy_a_egm(j-2,:,1),plot_policy_a_egm_JR)
+% hold on
+% plot(plot_policy_a_egm_j,policy_a_egm(3,:,1))
+% legend
+
+%approximate_policy_a = interp1(policy_a_egm,)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
