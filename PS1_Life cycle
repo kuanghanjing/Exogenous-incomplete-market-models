@@ -150,7 +150,7 @@ for p = j:-1:1 % Given the age, which is from J to 1 backwards
 
               [V(p,q,r),idx] = max(V_interim);
               policy_a(p,q,r) = a_grid(idx);
-              policy_c(p,q,r) = a_grid(q)*r_g + b + T_g - policy_a(p,q,r);
+              policy_c(p,q,r) = a_grid(q)*(1+r_g) + b + T_g - policy_a(p,q,r);
 
           elseif p<jr
               V0 = squeeze(V(p+1,:,:));
@@ -160,20 +160,70 @@ for p = j:-1:1 % Given the age, which is from J to 1 backwards
 
               [V(p,q,r),idx] = max(V_interim);
               policy_a(p,q,r) = a_grid(idx);
-              policy_c(p,q,r) = a_grid(q)*r_g + (1-theta)*efficiency(p,r)*wage + T_g - policy_a(p,q,r);
+              policy_c(p,q,r) = a_grid(q)*(1+r_g) + (1-theta)*efficiency(p,r)*wage + T_g - policy_a(p,q,r);
           end
       end
    end
 end
 
-plot_policy_a_JR = policy_a(5,:,2) - a_grid;
+plot_policy_a_JR = policy_a(50,:,2) - a_grid;
 plot_policy_a_j = policy_a(5,:,2)- a_grid;
 
-
+figure
 plot(a_grid, plot_policy_a_JR)
 hold on 
 plot(a_grid, plot_policy_a_j)
 legend
+
+query_a = linspace(a_min,a_max,10000);
+appr_policy_a_50 = interp1(a_grid,policy_a(50,:,2),query_a);
+appr_policy_a_5 = interp1(a_grid,policy_a(5,:,2),query_a);
+
+figure
+plot(a_grid,policy_a(50,:,2),'o', query_a,appr_policy_a_50,':.')
+hold on
+plot(a_grid,policy_a(5,:,2),'o', query_a,appr_policy_a_5,':.')
+
+appr_policy_a_51 =[];
+appr_policy_a_6=[];
+for z = 1:nzz
+    appr_policy_a_51_interp = interp1(a_grid,policy_a(51,:,z),query_a);
+    appr_policy_a_6_interp = interp1(a_grid,policy_a(6,:,z),query_a);
+    appr_policy_a_51 = [appr_policy_a_51, appr_policy_a_51_interp'];
+    appr_policy_a_6 = [appr_policy_a_6, appr_policy_a_6_interp'];
+end
+
+appr_policy_c_50 = zeros(length(query_a),nzz);
+appr_policy_c_51 = zeros(length(query_a),nzz);
+appr_policy_c_5 = zeros(length(query_a),nzz);
+appr_policy_c_6 = zeros(length(query_a),nzz);
+for a = 1:length(query_a) %given the asset holding today
+    for z = 1:nzz %given the shock today
+        appr_policy_c_50(a,z) = query_a(a)*(1+r_g) + b + T_g - appr_policy_a_50(a);
+        appr_policy_c_51(a,z) = query_a(a)*(1+r_g) + b + T_g - appr_policy_a_51(a,z);
+        appr_policy_c_5(a,z) = query_a(a)*(1+r_g) + (1-theta)*efficiency(5,2)*wage + T_g - appr_policy_a_5(a);
+        appr_policy_c_6(a,z) = query_a(a)*(1+r_g) + (1-theta)*efficiency(6,z)*wage + T_g - appr_policy_a_6(a,z);
+    end
+end
+
+
+%EEE_5  = zeros(length(query_a),nzz);
+%EEE_50 = log(abs(appr_policy_c_50(:,2) - ((appr_policy_c_51(:,2)).^(-sigma)).^(-1/sigma))./appr_policy_c_50(:,2));
+EEE_50 = appr_policy_c_50(:,2).^(-sigma) - beta*survival_rate(51)*(appr_policy_c_51(:,2)).^(-sigma);
+plot(query_a,EEE_50)
+
+for z = 1:nzz
+    %EEE_5(:,z) = log(abs(appr_policy_c_5(:,2) - ((appr_policy_c_5(:,z)).^(-sigma)).^(-1/sigma))./appr_policy_c_5(:,z));
+    EEE_5(:,z) = appr_policy_c_5(:,2).^(-sigma) - beta*survival_rate(51)*(appr_policy_c_6(:,z)).^(-sigma);
+    plot(query_a,EEE_5(:,z))
+    hold on
+end
+    
+
+
+
+
+
 
 
 
